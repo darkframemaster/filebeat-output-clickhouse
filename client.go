@@ -1,6 +1,7 @@
 package clickhouse_20200328
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"reflect"
@@ -76,7 +77,7 @@ func (c *client) Close() error {
 	return c.connect.Close()
 }
 
-func (c *client) Publish(batch publisher.Batch) error {
+func (c *client) Publish(_ context.Context, batch publisher.Batch) error {
 	if c == nil {
 		panic("no client")
 	}
