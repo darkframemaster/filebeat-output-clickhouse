@@ -3,15 +3,16 @@ package clickhouse_20200328
 import (
 	"database/sql"
 	"fmt"
-	"github.com/ClickHouse/clickhouse-go/lib/column"
-	"github.com/elastic/beats/libbeat/logp"
-	"github.com/elastic/beats/libbeat/outputs"
-	"github.com/elastic/beats/libbeat/outputs/codec"
-	"github.com/elastic/beats/libbeat/outputs/outil"
-	"github.com/elastic/beats/libbeat/publisher"
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/ClickHouse/clickhouse-go/lib/column"
+	"github.com/elastic/beats/v7/libbeat/logp"
+	"github.com/elastic/beats/v7/libbeat/outputs"
+	"github.com/elastic/beats/v7/libbeat/outputs/codec"
+	"github.com/elastic/beats/v7/libbeat/outputs/outil"
+	"github.com/elastic/beats/v7/libbeat/publisher"
 
 	_ "github.com/ClickHouse/clickhouse-go"
 )

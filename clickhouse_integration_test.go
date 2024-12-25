@@ -3,15 +3,16 @@ package clickhouse_20200328
 import (
 	"database/sql"
 	"fmt"
-	"github.com/ClickHouse/clickhouse-go"
-	"github.com/elastic/beats/libbeat/beat"
-	"github.com/elastic/beats/libbeat/common"
-	"github.com/elastic/beats/libbeat/outputs"
-	"github.com/elastic/beats/libbeat/outputs/outest"
-	"github.com/gofrs/uuid"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/ClickHouse/clickhouse-go"
+	"github.com/elastic/beats/v7/libbeat/beat"
+	"github.com/elastic/beats/v7/libbeat/common"
+	"github.com/elastic/beats/v7/libbeat/outputs"
+	"github.com/elastic/beats/v7/libbeat/outputs/outest"
+	"github.com/gofrs/uuid"
 )
 
 var (
