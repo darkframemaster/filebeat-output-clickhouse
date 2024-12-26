@@ -12,23 +12,17 @@ import (
 	"github.com/elastic/beats/v7/libbeat/logp"
 	"github.com/elastic/beats/v7/libbeat/outputs"
 	"github.com/elastic/beats/v7/libbeat/outputs/codec"
-	"github.com/elastic/beats/v7/libbeat/outputs/outil"
 	"github.com/elastic/beats/v7/libbeat/publisher"
 
 	_ "github.com/ClickHouse/clickhouse-go"
+	clickhouse "github.com/ClickHouse/clickhouse-go/v2"
 )
 
 type client struct {
-	observer              outputs.Observer
-	url                   string
-	key                   outil.Selector
-	password              string
-	table                 string
-	columns               []string
-	retryInterval         int
-	codec                 codec.Codec
-	connect               *sql.DB
-	skipUnexpectedTypeRow bool
+	observer outputs.Observer
+	codec    codec.Codec
+	connect  *sql.DB
+	config   clickHouseConfig
 }
 
 type rowResult struct {
@@ -38,19 +32,11 @@ type rowResult struct {
 
 func newClient(
 	observer outputs.Observer,
-	url string,
-	table string,
-	columns []string,
-	retryInterval int,
-	skipUnexpectedTypeRow bool,
+	config clickHouseConfig,
 ) *client {
 	return &client{
-		observer:              observer,
-		url:                   url,
-		table:                 table,
-		columns:               columns,
-		retryInterval:         retryInterval,
-		skipUnexpectedTypeRow: skipUnexpectedTypeRow,
+		observer: observer,
+		config:   config,
 	}
 }
 
@@ -58,13 +44,21 @@ func (c *client) Connect() error {
 	logger.Debugf("connect")
 
 	var err error
-	connect, err := sql.Open("clickhouse", c.url)
+	connect, err := clickhouse.OpenDB(&clickhouse.Options{
+		Addr: c.config.Hosts,
+		Auth: clickhouse.Auth{
+			Database: c.config.Database,
+			Username: c.config.User,
+			Password: c.config.Password,
+		},
+	})
 	if err == nil {
 		if e := connect.Ping(); e != nil {
 			err = e
 		}
 	}
 	if err != nil {
+		logger.Debugf("error connecting to clickhouse: %s", err)
 		c.sleepBeforeRetry(err)
 	}
 	c.connect = connect
@@ -103,16 +97,17 @@ func (c *client) Publish(_ context.Context, batch publisher.Batch) error {
 }
 
 func (c *client) String() string {
-	return "clickhouse(" + c.url + ")"
+	return "clickhouse(" + strings.Join(c.config.Hosts, ";") + ")"
 }
 
 func (c *client) extractData(events []publisher.Event) [][]interface{} {
-	cSize := len(c.columns)
+	cSize := len(c.config.Columns)
 	rows := make([][]interface{}, len(events))
 	for i, event := range events {
 		content := event.Content
+		logger.Infof("event content: %v", content)
 		row := make([]interface{}, cSize)
-		for i, c := range c.columns {
+		for i, c := range c.config.Columns {
 			if _, e := content.Fields[c]; e {
 				row[i], _ = content.GetValue(c)
 			}
@@ -124,9 +119,9 @@ func (c *client) extractData(events []publisher.Event) [][]interface{} {
 }
 
 func (c *client) generateSql() string {
-	cSize := len(c.columns)
+	cSize := len(c.config.Columns)
 	var columnStr, valueStr strings.Builder
-	for i, cl := range c.columns {
+	for i, cl := range c.config.Columns {
 		columnStr.WriteString(cl)
 		valueStr.WriteString("?")
 		if i < cSize-1 {
@@ -135,7 +130,7 @@ func (c *client) generateSql() string {
 		}
 	}
 
-	return fmt.Sprint("insert into ", c.table, " (", columnStr.String(), ") values (", valueStr.String(), ")")
+	return fmt.Sprint("insert into ", c.config.Table, " (", columnStr.String(), ") values (", valueStr.String(), ")")
 }
 
 func (c *client) batchInsert(sql string, rows [][]interface{}, errRows map[int]rowResult) error {
@@ -178,7 +173,7 @@ func (c *client) batchInsert(sql string, rows [][]interface{}, errRows map[int]r
 		if tx != nil {
 			tx.Rollback()
 		}
-		if c.skipUnexpectedTypeRow && len(errRows) > 0 {
+		if c.config.SkipUnexpectedTypeRow && len(errRows) > 0 {
 			return c.batchInsert(sql, rows, errRows)
 		}
 	} else {
@@ -200,6 +195,6 @@ func (c *client) batchInsert(sql string, rows [][]interface{}, errRows map[int]r
 }
 
 func (c *client) sleepBeforeRetry(err error) {
-	logp.Err("will sleep for %v seconds because an error occurs: %s", c.retryInterval, err)
-	time.Sleep(time.Second * time.Duration(c.retryInterval))
+	logp.Err("will sleep for %v seconds because an error occurs: %s", c.config.RetryInterval, err)
+	time.Sleep(time.Second * time.Duration(c.config.RetryInterval))
 }

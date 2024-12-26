@@ -5,7 +5,10 @@ import (
 )
 
 type clickHouseConfig struct {
-	Url                   string       `config:"url"`
+	Hosts                 []string     `config:"hosts"`
+	User                  string       `config:"user"`
+	Password              string       `config:"password"`
+	Database              string       `config:"database"`
 	Table                 string       `config:"table"`
 	Columns               []string     `config:"columns"`
 	Codec                 codec.Config `config:"codec"`
@@ -17,7 +20,7 @@ type clickHouseConfig struct {
 
 var (
 	defaultConfig = clickHouseConfig{
-		Url:                   "tcp://127.0.0.1:9000",
+		Hosts:                 []string{"127.0.0.1:9000"},
 		BulkMaxSize:           1000,
 		MaxRetries:            3,
 		RetryInterval:         60,
