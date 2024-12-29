@@ -14,7 +14,6 @@ import (
 	"github.com/elastic/beats/v7/libbeat/outputs/codec"
 	"github.com/elastic/beats/v7/libbeat/publisher"
 
-	_ "github.com/ClickHouse/clickhouse-go"
 	clickhouse "github.com/ClickHouse/clickhouse-go/v2"
 )
 
