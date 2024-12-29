@@ -44,7 +44,7 @@ func (c *client) Connect() error {
 	logger.Debugf("connect")
 
 	var err error
-	connect, err := clickhouse.OpenDB(&clickhouse.Options{
+	connect := clickhouse.OpenDB(&clickhouse.Options{
 		Addr: c.config.Hosts,
 		Auth: clickhouse.Auth{
 			Database: c.config.Database,

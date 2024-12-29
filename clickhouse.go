@@ -35,7 +35,7 @@ func makeClickHouse(
 		return outputs.Fail(errors.New("ClickHouse: the table columns must be set"))
 	}
 
-	client := newClient(observer, config.Url, config.Table, config.Columns, config.RetryInterval, config.SkipUnexpectedTypeRow)
+	client := newClient(observer, config)
 
 	return outputs.Success(config.BulkMaxSize, config.MaxRetries, client)
 }
