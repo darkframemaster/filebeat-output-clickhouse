@@ -106,15 +106,20 @@ func (c *client) extractData(events []publisher.Event) [][]interface{} {
 	rows := make([][]interface{}, len(events))
 	for i, event := range events {
 		content := event.Content
-		c.logger.Infof("event content: %v", content.Fields["json"])
+		jsonContent, ok := content.Fields["json"].(map[string]interface{})
+		if !ok {
+			c.logger.Warnf("event content is not a json object: %v", content)
+			continue
+		}
 
+		c.logger.Infof("event content: %v", jsonContent)
 		row := make([]interface{}, cSize)
 		for i, col := range c.config.Columns {
 			if colAlias, ok := c.config.ColumnsAlias[col]; ok {
 				col = colAlias
 			}
 
-			if _, e := content.Fields["json"][col]; e {
+			if _, e := jsonContent[col]; e {
 				row[i], _ = content.GetValue(col)
 			}
 		}
