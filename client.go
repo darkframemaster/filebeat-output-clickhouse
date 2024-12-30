@@ -42,7 +42,7 @@ func newClient(
 }
 
 func (c *client) Connect() error {
-	logger.Debugf("connect")
+	c.logger.Debugf("connect")
 
 	var err error
 	connect := clickhouse.OpenDB(&clickhouse.Options{
@@ -59,7 +59,7 @@ func (c *client) Connect() error {
 		}
 	}
 	if err != nil {
-		logger.Debugf("error connecting to clickhouse: %s", err)
+		c.logger.Debugf("error connecting to clickhouse: %s", err)
 		c.sleepBeforeRetry(err)
 	}
 	c.connect = connect
@@ -68,7 +68,7 @@ func (c *client) Connect() error {
 }
 
 func (c *client) Close() error {
-	logger.Debugf("close connection")
+	c.logger.Debugf("close connection")
 	return c.connect.Close()
 }
 
@@ -106,7 +106,7 @@ func (c *client) extractData(events []publisher.Event) [][]interface{} {
 	rows := make([][]interface{}, len(events))
 	for i, event := range events {
 		content := event.Content
-		logger.Infof("event content: %v", content)
+		c.logger.Infof("event content: %v", content)
 		row := make([]interface{}, cSize)
 		for i, c := range c.config.Columns {
 			if _, e := content.Fields[c]; e {
