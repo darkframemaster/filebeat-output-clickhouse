@@ -9,10 +9,12 @@ import (
 	"github.com/elastic/beats/v7/libbeat/outputs"
 )
 
-var logger = logp.NewLogger("ClickHouse")
+const (
+	logSelector = "clickhouse"
+)
 
 func init() {
-	outputs.RegisterType("clickHouse", makeClickHouse)
+	outputs.RegisterType("clickhouse", makeClickHouse)
 }
 
 func makeClickHouse(
@@ -21,11 +23,13 @@ func makeClickHouse(
 	observer outputs.Observer,
 	cfg *common.Config,
 ) (outputs.Group, error) {
+	logger := logp.NewLogger(logSelector)
 
 	config := defaultConfig
 	if err := cfg.Unpack(&config); err != nil {
 		return outputs.Fail(err)
 	}
+	logger.Debugf("clickhouse output: %v", config)
 
 	if len(config.Table) == 0 {
 		return outputs.Fail(errors.New("ClickHouse: the table name must be set"))

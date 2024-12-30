@@ -22,6 +22,7 @@ type client struct {
 	codec    codec.Codec
 	connect  *sql.DB
 	config   clickHouseConfig
+	logger   *logp.Loggera
 }
 
 type rowResult struct {
@@ -36,6 +37,7 @@ func newClient(
 	return &client{
 		observer: observer,
 		config:   config,
+		logger:   logp.NewLogger(logSelector),
 	}
 }
 
