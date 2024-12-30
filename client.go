@@ -22,7 +22,7 @@ type client struct {
 	codec    codec.Codec
 	connect  *sql.DB
 	config   clickHouseConfig
-	logger   *logp.Loggera
+	logger   *logp.Logger
 }
 
 type rowResult struct {
