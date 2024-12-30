@@ -106,16 +106,20 @@ func (c *client) extractData(events []publisher.Event) [][]interface{} {
 	rows := make([][]interface{}, len(events))
 	for i, event := range events {
 		content := event.Content
-		c.logger.Infof("event content: %v", content)
+		c.logger.Infof("event content: %v", content.Fields["json"])
+
 		row := make([]interface{}, cSize)
-		for i, c := range c.config.Columns {
-			if _, e := content.Fields[c]; e {
-				row[i], _ = content.GetValue(c)
+		for i, col := range c.config.Columns {
+			if colAlias, ok := c.config.ColumnsAlias[col]; ok {
+				col = colAlias
+			}
+
+			if _, e := content.Fields["json"][col]; e {
+				row[i], _ = content.GetValue(col)
 			}
 		}
 		rows[i] = row
 	}
-
 	return rows
 }
 
@@ -139,55 +143,52 @@ func (c *client) batchInsert(sql string, rows [][]interface{}, errRows map[int]r
 		errRows = make(map[int]rowResult)
 	}
 
-	var err error
 	tx, err := c.connect.Begin()
-	if err == nil {
-		stmt, e := tx.Prepare(sql)
-		if e == nil {
-			for i, row := range rows {
-				if !reflect.DeepEqual(errRows[i], rowResult{}) {
-					continue
-				}
-				_, e := stmt.Exec(row...)
-				if e != nil {
-					_, r := e.(*column.ErrUnexpectedType)
-					if !r {
-						err = e
-						break
-					} else {
-						err = e
-						errRows[i] = rowResult{
-							row,
-							e,
-						}
-					}
+	if err != nil {
+		return err
+	}
+
+	stmt, err := tx.Prepare(sql)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for i, row := range rows {
+		if !reflect.DeepEqual(errRows[i], rowResult{}) {
+			continue
+		}
+
+		_, err := stmt.Exec(row...)
+		if err != nil {
+			_, r := err.(*column.ErrUnexpectedType)
+			if !r {
+				break
+			} else {
+				errRows[i] = rowResult{
+					row,
+					err,
 				}
 			}
-		} else {
-			err = e
-		}
-		if stmt != nil {
-			defer stmt.Close()
 		}
 	}
+
 	if err != nil {
-		if tx != nil {
-			tx.Rollback()
+		err = tx.Rollback()
+		if err != nil {
+			logp.Err("rollback error: %s", err)
 		}
+
 		if c.config.SkipUnexpectedTypeRow && len(errRows) > 0 {
 			return c.batchInsert(sql, rows, errRows)
 		}
 	} else {
-		if tx != nil {
-			e := tx.Commit()
-			if e != nil {
-				err = e
-			} else {
-				if len(errRows) > 0 {
-					for _, r := range errRows {
-						logp.Err("Skip this row of data: '%s', error: '%s'", r.Row, r.E)
-					}
-				}
+		err = tx.Commit()
+		if err != nil {
+			logp.Err("commit error: %s", err)
+		} else {
+			for _, r := range errRows {
+				logp.Err("Skip this row of data: '%s', error: '%s'", r.Row, r.E)
 			}
 		}
 	}
