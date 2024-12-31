@@ -55,7 +55,7 @@ func (c *client) Connect() error {
 		return err
 	}
 
-	c.connect = connect
+	c.connect = &connect
 	return err
 }
 
