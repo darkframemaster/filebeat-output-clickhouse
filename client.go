@@ -8,7 +8,6 @@ import (
 
 	"github.com/elastic/beats/v7/libbeat/logp"
 	"github.com/elastic/beats/v7/libbeat/outputs"
-	"github.com/elastic/beats/v7/libbeat/outputs/codec"
 	"github.com/elastic/beats/v7/libbeat/publisher"
 
 	clickhouse "github.com/ClickHouse/clickhouse-go/v2"
@@ -16,7 +15,6 @@ import (
 
 type client struct {
 	observer outputs.Observer
-	codec    codec.Codec
 	connect  *clickhouse.Conn
 	config   clickHouseConfig
 	logger   *logp.Logger
@@ -37,7 +35,7 @@ func (c *client) Connect() error {
 	c.logger.Debugf("connect")
 
 	var err error
-	connect := clickhouse.Open(&clickhouse.Options{
+	connect, err := clickhouse.Open(&clickhouse.Options{
 		Addr: c.config.Hosts,
 		Auth: clickhouse.Auth{
 			Database: c.config.Database,
@@ -45,23 +43,25 @@ func (c *client) Connect() error {
 			Password: c.config.Password,
 		},
 	})
-	if err == nil {
-		if e := connect.Ping(); e != nil {
-			err = e
-		}
-	}
 	if err != nil {
 		c.logger.Debugf("error connecting to clickhouse: %s", err)
 		c.sleepBeforeRetry(err)
+		return err
 	}
-	c.connect = connect
 
+	if err := connect.Ping(); err != nil {
+		c.logger.Debugf("error ping to clickhouse: %s", err)
+		c.sleepBeforeRetry(err)
+		return err
+	}
+
+	c.connect = connect
 	return err
 }
 
 func (c *client) Close() error {
 	c.logger.Debugf("close connection")
-	return c.connect.Close()
+	return (*c.connect).Close()
 }
 
 func (c *client) Publish(_ context.Context, batch publisher.Batch) error {
@@ -110,7 +110,7 @@ func (c *client) generateSql() string {
 }
 
 func (c *client) batchInsert(sql string, rows []string) error {
-	batch, err := c.connect.PrepareBatch(sql)
+	batch, err := (*c.connect).PrepareBatch(sql)
 	if err != nil {
 		return err
 	}
