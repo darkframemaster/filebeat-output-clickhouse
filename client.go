@@ -2,13 +2,10 @@ package clickhouse_20200328
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"reflect"
 	"strings"
 	"time"
 
-	"github.com/ClickHouse/clickhouse-go/lib/column"
 	"github.com/elastic/beats/v7/libbeat/logp"
 	"github.com/elastic/beats/v7/libbeat/outputs"
 	"github.com/elastic/beats/v7/libbeat/outputs/codec"
@@ -20,14 +17,9 @@ import (
 type client struct {
 	observer outputs.Observer
 	codec    codec.Codec
-	connect  *sql.DB
+	connect  *clickhouse.Conn
 	config   clickHouseConfig
 	logger   *logp.Logger
-}
-
-type rowResult struct {
-	Row []interface{}
-	E   error
 }
 
 func newClient(
@@ -45,7 +37,7 @@ func (c *client) Connect() error {
 	c.logger.Debugf("connect")
 
 	var err error
-	connect := clickhouse.OpenDB(&clickhouse.Options{
+	connect := clickhouse.Open(&clickhouse.Options{
 		Addr: c.config.Hosts,
 		Auth: clickhouse.Auth{
 			Database: c.config.Database,
@@ -86,7 +78,7 @@ func (c *client) Publish(_ context.Context, batch publisher.Batch) error {
 	rows := c.extractData(events)
 	sql := c.generateSql()
 
-	err := c.batchInsert(sql, rows, nil)
+	err := c.batchInsert(sql, rows)
 	if err != nil {
 		c.sleepBeforeRetry(err)
 		batch.RetryEvents(events)
@@ -101,103 +93,36 @@ func (c *client) String() string {
 	return "clickhouse(" + strings.Join(c.config.Hosts, ";") + ")"
 }
 
-func (c *client) extractData(events []publisher.Event) [][]interface{} {
-	cSize := len(c.config.Columns)
-	rows := make([][]interface{}, len(events))
-	for i, event := range events {
-		content := event.Content
-		jsonContent, ok := content.Fields["json"].(map[string]interface{})
-		if !ok {
-			c.logger.Warnf("event content is not a json object: %v", content)
-			continue
-		}
+func (c *client) extractData(events []publisher.Event) []string {
+	rows := make([]string, len(events))
+	for i := range events {
+		data := events[i].Content.Fields.String()
+		rows[i] = data
 
-		c.logger.Infof("event content: %v", jsonContent)
-		row := make([]interface{}, cSize)
-		for i, col := range c.config.Columns {
-			if colAlias, ok := c.config.ColumnsAlias[col]; ok {
-				col = colAlias
-			}
-
-			if _, e := jsonContent[col]; e {
-				row[i], _ = content.GetValue(col)
-			}
-		}
-		rows[i] = row
+		c.logger.Infof("event content: %v", data)
 	}
 	return rows
 }
 
 func (c *client) generateSql() string {
-	cSize := len(c.config.Columns)
-	var columnStr, valueStr strings.Builder
-	for i, cl := range c.config.Columns {
-		columnStr.WriteString(cl)
-		valueStr.WriteString("?")
-		if i < cSize-1 {
-			columnStr.WriteString(",")
-			valueStr.WriteString(",")
-		}
-	}
-
-	return fmt.Sprint("insert into ", c.config.Table, " (", columnStr.String(), ") values (", valueStr.String(), ")")
+	// return fmt.Sprint("insert into ", c.config.Table, " (", c.config.Column, ") values (?)")
+	return fmt.Sprint("insert into ", c.config.Table)
 }
 
-func (c *client) batchInsert(sql string, rows [][]interface{}, errRows map[int]rowResult) error {
-	if errRows == nil {
-		errRows = make(map[int]rowResult)
-	}
-
-	tx, err := c.connect.Begin()
+func (c *client) batchInsert(sql string, rows []string) error {
+	batch, err := c.connect.PrepareBatch(sql)
 	if err != nil {
 		return err
 	}
 
-	stmt, err := tx.Prepare(sql)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	for i, row := range rows {
-		if !reflect.DeepEqual(errRows[i], rowResult{}) {
-			continue
-		}
-
-		_, err := stmt.Exec(row...)
+	for _, row := range rows {
+		err := batch.Append(row)
 		if err != nil {
-			_, r := err.(*column.ErrUnexpectedType)
-			if !r {
-				break
-			} else {
-				errRows[i] = rowResult{
-					row,
-					err,
-				}
-			}
+			c.logger.Warnf("error appending row: %s", err)
 		}
 	}
 
-	if err != nil {
-		err = tx.Rollback()
-		if err != nil {
-			logp.Err("rollback error: %s", err)
-		}
-
-		if c.config.SkipUnexpectedTypeRow && len(errRows) > 0 {
-			return c.batchInsert(sql, rows, errRows)
-		}
-	} else {
-		err = tx.Commit()
-		if err != nil {
-			logp.Err("commit error: %s", err)
-		} else {
-			for _, r := range errRows {
-				logp.Err("Skip this row of data: '%s', error: '%s'", r.Row, r.E)
-			}
-		}
-	}
-
+	err = batch.Send()
 	return err
 }
 

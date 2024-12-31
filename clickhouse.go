@@ -35,11 +35,10 @@ func makeClickHouse(
 		return outputs.Fail(errors.New("ClickHouse: the table name must be set"))
 	}
 
-	if len(config.Columns) == 0 {
-		return outputs.Fail(errors.New("ClickHouse: the table columns must be set"))
+	if len(config.Column) != 1 {
+		return outputs.Fail(errors.New("ClickHouse: the table columns must be set and only one column is supported"))
 	}
 
 	client := newClient(observer, config)
-
 	return outputs.Success(config.BulkMaxSize, config.MaxRetries, client)
 }
