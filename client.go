@@ -49,7 +49,7 @@ func (c *client) Connect() error {
 		return err
 	}
 
-	if err := connect.Ping(); err != nil {
+	if err := connect.Ping(context.TODO()); err != nil {
 		c.logger.Debugf("error ping to clickhouse: %s", err)
 		c.sleepBeforeRetry(err)
 		return err
@@ -110,7 +110,7 @@ func (c *client) generateSql() string {
 }
 
 func (c *client) batchInsert(sql string, rows []string) error {
-	batch, err := (*c.connect).PrepareBatch(sql)
+	batch, err := (*c.connect).PrepareBatch(context.TODO(), sql)
 	if err != nil {
 		return err
 	}
