@@ -99,13 +99,12 @@ func (c *client) extractData(events []publisher.Event) []string {
 		data := events[i].Content.Fields.String()
 		rows[i] = data
 
-		c.logger.Infof("event content: %v", data)
+		c.logger.Debugf("event content: %v", data)
 	}
 	return rows
 }
 
 func (c *client) generateSql() string {
-	// return fmt.Sprint("insert into ", c.config.Table, " (", c.config.Column, ") values (?)")
 	return fmt.Sprint("insert into ", c.config.Table)
 }
 
