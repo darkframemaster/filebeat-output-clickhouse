@@ -126,6 +126,6 @@ func (c *client) batchInsert(sql string, rows []string) error {
 }
 
 func (c *client) sleepBeforeRetry(err error) {
-	c.logger.Err("will sleep for %v seconds because an error occurs: %s", c.config.RetryInterval, err)
+	c.logger.Errf("will sleep for %v seconds because an error occurs: %s", c.config.RetryInterval, err)
 	time.Sleep(time.Second * time.Duration(c.config.RetryInterval))
 }
