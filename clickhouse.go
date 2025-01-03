@@ -11,6 +11,7 @@ import (
 
 const (
 	logSelector = "clickhouse"
+	version     = "v0.0.1"
 )
 
 func init() {
@@ -24,6 +25,7 @@ func makeClickHouse(
 	cfg *common.Config,
 ) (outputs.Group, error) {
 	logger := logp.NewLogger(logSelector)
+	logger.Infof("clickhouse output plugin. Version: %s", version)
 
 	config := defaultConfig
 	if err := cfg.Unpack(&config); err != nil {
