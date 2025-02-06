@@ -110,6 +110,8 @@ func (c *client) generateSql() string {
 
 func (c *client) batchInsert(sql string, rows []string) error {
 	batch, err := (*c.connect).PrepareBatch(context.TODO(), sql)
+	c.logger.Infof("sql: %s", sql)
+
 	if err != nil {
 		return err
 	}
