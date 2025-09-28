@@ -24,9 +24,10 @@ type clickHouseConfig struct {
 
 var (
 	defaultConfig = clickHouseConfig{
-		Hosts:            []string{"127.0.0.1:9000"},
-		OutputBatchSize:  50000,
-		CkWriteBatchSize: 50000,
-		MaxRetries:       3,
+		Hosts:                 []string{"127.0.0.1:9000"},
+		OutputBatchSize:       50000,
+		CkWriteBatchSize:      50000,
+		CkWriteMaxConcurrency: 10,
+		MaxRetries:            3,
 	}
 )
