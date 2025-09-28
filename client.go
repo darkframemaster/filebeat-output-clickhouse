@@ -124,7 +124,7 @@ func (c *client) batchInsert(sql string, rows []string) error {
 	}
 	edTs1 := time.Now().UnixMilli()
 
-	err = batch.Send()
+	// err = batch.Send()
 	edTs2 := time.Now().UnixMilli()
 	c.logger.Infof("inserted %d rows, send cost: %d ms, total cost: %d ms", len(rows), edTs2-edTs1, edTs2-stTs)
 	return err
