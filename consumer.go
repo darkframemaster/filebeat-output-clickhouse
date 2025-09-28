@@ -71,8 +71,8 @@ func (c *consumer) run() {
 			batchBuf = append(batchBuf, row)
 			if len(batchBuf) >= c.cfg.CkWriteBatchSize {
 				nowMs := time.Now().UnixMilli()
-				timeCounter = nowMs
 				c.logger.Infof("batch size reached, flushing, toke %d ms since last flush", nowMs-timeCounter)
+				timeCounter = nowMs
 				c.flushAsync(&batchBuf)
 			}
 		case <-flushTicker.C:

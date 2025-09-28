@@ -112,7 +112,7 @@ func (c *client) Publish(_ context.Context, batch publisher.Batch) error {
 		panic("no batch")
 	}
 
-	stTs := time.Now().UnixMilli()
+	ts1 := time.Now().UnixMilli()
 	events := batch.Events()
 	c.observer.NewBatch(len(events))
 
@@ -125,11 +125,12 @@ func (c *client) Publish(_ context.Context, batch publisher.Batch) error {
 		}
 		c.rowsChan <- r
 	}
-	edTs := time.Now().UnixMilli()
-	c.logger.Infof("enqueued %d rows to channel, took %d ms", len(rows), edTs-stTs)
+	ts2 := time.Now().UnixMilli()
 
 	// when enqueued successfully, ACK the batch
 	batch.ACK()
+	ts3 := time.Now().UnixMilli()
+	c.logger.Infof("enqueued %d rows to channel, enqueue %d ms, total %d ms", len(rows), ts2-ts1, ts3-ts1)
 	return nil
 }
 
