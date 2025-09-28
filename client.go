@@ -109,25 +109,27 @@ func (c *client) generateSql() string {
 }
 
 func (c *client) batchInsert(sql string, rows []string) error {
-	stTs := time.Now().UnixMilli()
-	batch, err := (*c.connect).PrepareBatch(context.TODO(), sql)
-	if err != nil {
-		c.logger.Errorf("error preparing batch: %s", err)
-		return err
-	}
+	// stTs := time.Now().UnixMilli()
+	// batch, err := (*c.connect).PrepareBatch(context.TODO(), sql)
+	// if err != nil {
+	// 	c.logger.Errorf("error preparing batch: %s", err)
+	// 	return err
+	// }
 
-	for _, row := range rows {
-		err := batch.Append(row)
-		if err != nil {
-			c.logger.Warnf("error appending row: %s", err)
-		}
-	}
-	edTs1 := time.Now().UnixMilli()
+	// for _, row := range rows {
+	// 	err := batch.Append(row)
+	// 	if err != nil {
+	// 		c.logger.Warnf("error appending row: %s", err)
+	// 	}
+	// }
+	// edTs1 := time.Now().UnixMilli()
 
 	// err = batch.Send()
-	edTs2 := time.Now().UnixMilli()
-	c.logger.Infof("inserted %d rows, send cost: %d ms, total cost: %d ms", len(rows), edTs2-edTs1, edTs2-stTs)
-	return err
+	// edTs2 := time.Now().UnixMilli()
+	// c.logger.Infof("inserted %d rows, send cost: %d ms, total cost: %d ms", len(rows), edTs2-edTs1, edTs2-stTs)
+	// return err
+	c.logger.Infof("inserted %d rows", len(rows))
+	return nil
 }
 
 func (c *client) sleepBeforeRetry(err error) {
