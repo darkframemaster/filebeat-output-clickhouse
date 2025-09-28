@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/elastic/beats/v7/libbeat/logp"
 	"github.com/elastic/beats/v7/libbeat/outputs"
@@ -37,7 +38,7 @@ func newClient(
 		logger:   logp.NewLogger(logSelector),
 	}
 
-	if config.CkWriteBatchSize < 0 {
+	if config.OutputBatchSize < 0 {
 		panic("CkWriteBatchSize must be > 0")
 	}
 	if config.CkWriteBatchSize <= 0 {
@@ -47,8 +48,9 @@ func newClient(
 		panic("CkWriteMaxConcurrency must be > 0")
 	}
 
-	buf := config.CkWriteBatchSize
-	c.rowsChan = make(chan string, buf)
+	c.logger.Infof("clickhouse client config: %+v", config)
+
+	c.rowsChan = make(chan string, config.OutputBatchSize)
 
 	// create consumer that will read from rowsChan and write to ClickHouse
 	c.consumer = newConsumer(&c.connect, c.rowsChan, config, c.logger)
@@ -110,6 +112,7 @@ func (c *client) Publish(_ context.Context, batch publisher.Batch) error {
 		panic("no batch")
 	}
 
+	stTs := time.Now().UnixMilli()
 	events := batch.Events()
 	c.observer.NewBatch(len(events))
 
@@ -122,6 +125,8 @@ func (c *client) Publish(_ context.Context, batch publisher.Batch) error {
 		}
 		c.rowsChan <- r
 	}
+	edTs := time.Now().UnixMilli()
+	c.logger.Infof("enqueued %d rows to channel, took %d ms", len(rows), edTs-stTs)
 
 	// when enqueued successfully, ACK the batch
 	batch.ACK()

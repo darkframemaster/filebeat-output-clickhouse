@@ -51,6 +51,7 @@ func (c *consumer) run() {
 	flushTicker := time.NewTicker(10 * time.Second)
 	defer flushTicker.Stop()
 
+	timeCounter := time.Now().UnixMilli()
 	for {
 		select {
 		case <-c.stopCh:
@@ -69,6 +70,9 @@ func (c *consumer) run() {
 			}
 			batchBuf = append(batchBuf, row)
 			if len(batchBuf) >= c.cfg.CkWriteBatchSize {
+				nowMs := time.Now().UnixMilli()
+				timeCounter = nowMs
+				c.logger.Infof("batch size reached, flushing, toke %d ms since last flush", nowMs-timeCounter)
 				c.flushAsync(&batchBuf)
 			}
 		case <-flushTicker.C:

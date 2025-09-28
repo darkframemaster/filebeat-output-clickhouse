@@ -7,12 +7,12 @@ type clickHouseConfig struct {
 	Database string   `config:"database"`
 	Table    string   `config:"table"`
 
-	// OutputBatchSize: the beat output client publish buffer size. (beats side)
-	OutputBatchSize int `config:"bulk_max_size"`
-
-	// CkWriteBatchSize:
+	// OutputBatchSize:
+	// - the beat output client publish buffer size. (beats side)
 	// - ck consumer channel buffer size. (consumer side)
-	// - the max batch size for each ck insert. (ck side)
+	OutputBatchSize int `config:"output_batch_size"`
+
+	// CkWriteBatchSize: the max batch size for each ck insert. (ck side)
 	// For performance perpose, this value should not be too small.
 	CkWriteBatchSize int `config:"consumer_batch_size"`
 
