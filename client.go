@@ -109,9 +109,8 @@ func (c *client) generateSql() string {
 }
 
 func (c *client) batchInsert(sql string, rows []string) error {
+	stTs := time.Now().UnixMilli()
 	batch, err := (*c.connect).PrepareBatch(context.TODO(), sql)
-	c.logger.Infof("sql: %s", sql)
-
 	if err != nil {
 		return err
 	}
@@ -124,6 +123,8 @@ func (c *client) batchInsert(sql string, rows []string) error {
 	}
 
 	err = batch.Send()
+	edTs := time.Now().UnixMilli()
+	c.logger.Infof("inserted %d rows, cost: %d", len(rows), edTs-stTs)
 	return err
 }
 
