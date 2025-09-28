@@ -60,7 +60,7 @@ func (c *client) Connect() error {
 }
 
 func (c *client) Close() error {
-	c.logger.Debugf("close connection")
+	c.logger.Infof("close connection")
 	return (*c.connect).Close()
 }
 
@@ -112,6 +112,7 @@ func (c *client) batchInsert(sql string, rows []string) error {
 	stTs := time.Now().UnixMilli()
 	batch, err := (*c.connect).PrepareBatch(context.TODO(), sql)
 	if err != nil {
+		c.logger.Errorf("error preparing batch: %s", err)
 		return err
 	}
 
