@@ -56,46 +56,53 @@ func (c *consumer) run() {
 		case <-c.stopCh:
 			// flush remaining
 			if len(batchBuf) > 0 {
-				_ = c.flush(batchBuf)
+				c.flushSync(batchBuf)
 			}
 			return
 		case row, ok := <-c.rowsCh:
 			if !ok {
 				// channel closed, flush and exit
 				if len(batchBuf) > 0 {
-					_ = c.flush(batchBuf)
+					c.flushSync(batchBuf)
 				}
 				return
 			}
 			batchBuf = append(batchBuf, row)
 			if len(batchBuf) >= c.cfg.CkWriteBatchSize {
-				toFlush := make([]string, len(batchBuf))
-				copy(toFlush, batchBuf)
-				batchBuf = batchBuf[:0]
-				// flush asynchronously with concurrency control
-				c.wg.Add(1)
-				go func(rows []string) {
-					defer c.wg.Done()
-					c.semaphore <- struct{}{}        // acquire semaphore
-					defer func() { <-c.semaphore }() // release semaphore
-					_ = c.flush(rows)
-				}(toFlush)
+				c.flushAsync(&batchBuf)
 			}
 		case <-flushTicker.C:
 			if len(batchBuf) > 0 {
-				toFlush := make([]string, len(batchBuf))
-				copy(toFlush, batchBuf)
-				batchBuf = batchBuf[:0]
-				c.wg.Add(1)
-				go func(rows []string) {
-					defer c.wg.Done()
-					c.semaphore <- struct{}{}        // acquire semaphore
-					defer func() { <-c.semaphore }() // release semaphore
-					_ = c.flush(rows)
-				}(toFlush)
+				c.flushAsync(&batchBuf)
 			}
 		}
 	}
+}
+
+// flushAsync performs asynchronous flush with concurrency control
+func (c *consumer) flushAsync(batchBuf *[]string) {
+	if len(*batchBuf) == 0 {
+		return
+	}
+
+	// copy data to independent slice
+	toFlush := make([]string, len(*batchBuf))
+	copy(toFlush, *batchBuf)
+	*batchBuf = (*batchBuf)[:0] // reset buffer
+
+	// start async flush with concurrency control
+	c.wg.Add(1)
+	go func(rows []string) {
+		defer c.wg.Done()
+		c.semaphore <- struct{}{}        // acquire semaphore
+		defer func() { <-c.semaphore }() // release semaphore
+		_ = c.flush(rows)
+	}(toFlush)
+}
+
+// flushSync performs synchronous flush
+func (c *consumer) flushSync(rows []string) {
+	_ = c.flush(rows)
 }
 
 // flush writes rows to ClickHouse using a short-lived batch
