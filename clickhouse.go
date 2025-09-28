@@ -38,5 +38,5 @@ func makeClickHouse(
 	}
 
 	client := newClient(observer, config)
-	return outputs.Success(config.BulkMaxSize, config.MaxRetries, client)
+	return outputs.Success(config.OutputBatchSize, config.MaxRetries, client)
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
+	"sync/atomic"
 
 	"github.com/elastic/beats/v7/libbeat/logp"
 	"github.com/elastic/beats/v7/libbeat/outputs"
@@ -13,22 +13,47 @@ import (
 	clickhouse "github.com/ClickHouse/clickhouse-go/v2"
 )
 
+// implement outputs.Client interface，
 type client struct {
 	observer outputs.Observer
 	connect  *clickhouse.Conn
 	config   clickHouseConfig
 	logger   *logp.Logger
+	// rows channel for background consumer
+	rowsChan chan string
+	// background consumer that flushes rows to ClickHouse
+	consumer *consumer
+	// closed flag set when Close() is called to avoid sending to closed channel
+	closed uint32
 }
 
 func newClient(
 	observer outputs.Observer,
 	config clickHouseConfig,
 ) *client {
-	return &client{
+	c := &client{
 		observer: observer,
 		config:   config,
 		logger:   logp.NewLogger(logSelector),
 	}
+
+	if config.CkWriteBatchSize < 0 {
+		panic("CkWriteBatchSize must be > 0")
+	}
+	if config.CkWriteBatchSize <= 0 {
+		panic("CkWriteBatchSize must be >= 0")
+	}
+	if config.CkWriteMaxConcurrency <= 0 {
+		panic("CkWriteMaxConcurrency must be > 0")
+	}
+
+	buf := config.CkWriteBatchSize
+	c.rowsChan = make(chan string, buf)
+
+	// create consumer that will read from rowsChan and write to ClickHouse
+	c.consumer = newConsumer(&c.connect, c.rowsChan, config, c.logger)
+
+	return c
 }
 
 func (c *client) Connect() error {
@@ -44,15 +69,13 @@ func (c *client) Connect() error {
 		},
 	})
 	if err != nil {
-		c.logger.Debugf("error connecting to clickhouse: %s", err)
-		c.sleepBeforeRetry(err)
-		return err
+		c.logger.Errorf("error connecting to clickhouse: %s", err)
+		panic(err)
 	}
 
 	if err := connect.Ping(context.TODO()); err != nil {
-		c.logger.Debugf("error ping to clickhouse: %s", err)
-		c.sleepBeforeRetry(err)
-		return err
+		c.logger.Errorf("error ping to clickhouse: %s", err)
+		panic(err)
 	}
 
 	c.connect = &connect
@@ -61,7 +84,22 @@ func (c *client) Connect() error {
 
 func (c *client) Close() error {
 	c.logger.Infof("close connection")
-	return (*c.connect).Close()
+
+	// stop consumer gracefully
+	if c.consumer != nil {
+		c.consumer.Stop()
+	}
+
+	// mark closed and close rows channel
+	atomic.StoreUint32(&c.closed, 1)
+	if c.rowsChan != nil {
+		close(c.rowsChan)
+	}
+
+	if c.connect != nil {
+		return (*c.connect).Close()
+	}
+	return nil
 }
 
 func (c *client) Publish(_ context.Context, batch publisher.Batch) error {
@@ -76,17 +114,18 @@ func (c *client) Publish(_ context.Context, batch publisher.Batch) error {
 	c.observer.NewBatch(len(events))
 
 	rows := c.extractData(events)
-	sql := c.generateSql()
 
-	err := c.batchInsert(sql, rows)
-	if err != nil {
-		c.sleepBeforeRetry(err)
-		batch.RetryEvents(events)
-	} else {
-		batch.ACK()
+	// enqueue rows to consumer channel; block if channel is full to provide backpressure
+	for _, r := range rows {
+		if c.rowsChan == nil || atomic.LoadUint32(&c.closed) == 1 {
+			continue
+		}
+		c.rowsChan <- r
 	}
 
-	return err
+	// when enqueued successfully, ACK the batch
+	batch.ACK()
+	return nil
 }
 
 func (c *client) String() string {
@@ -106,33 +145,4 @@ func (c *client) extractData(events []publisher.Event) []string {
 
 func (c *client) generateSql() string {
 	return fmt.Sprint("insert into ", c.config.Table)
-}
-
-func (c *client) batchInsert(sql string, rows []string) error {
-	// stTs := time.Now().UnixMilli()
-	// batch, err := (*c.connect).PrepareBatch(context.TODO(), sql)
-	// if err != nil {
-	// 	c.logger.Errorf("error preparing batch: %s", err)
-	// 	return err
-	// }
-
-	// for _, row := range rows {
-	// 	err := batch.Append(row)
-	// 	if err != nil {
-	// 		c.logger.Warnf("error appending row: %s", err)
-	// 	}
-	// }
-	// edTs1 := time.Now().UnixMilli()
-
-	// err = batch.Send()
-	// edTs2 := time.Now().UnixMilli()
-	// c.logger.Infof("inserted %d rows, send cost: %d ms, total cost: %d ms", len(rows), edTs2-edTs1, edTs2-stTs)
-	// return err
-	c.logger.Infof("inserted %d rows", len(rows))
-	return nil
-}
-
-func (c *client) sleepBeforeRetry(err error) {
-	c.logger.Errorf("will sleep for %v seconds because an error occurs: %s", c.config.RetryInterval, err)
-	time.Sleep(time.Second * time.Duration(c.config.RetryInterval))
 }
