@@ -69,6 +69,7 @@ func (c *client) Connect() error {
 			Username: c.config.User,
 			Password: c.config.Password,
 		},
+		ConnOpenStrategy: clickhouse.ConnOpenRoundRobin,
 	})
 	if err != nil {
 		c.logger.Errorf("error connecting to clickhouse: %s", err)
